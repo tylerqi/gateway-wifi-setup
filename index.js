@@ -1,14 +1,11 @@
 var Express = require('express');
 var Handlebars = require('handlebars');
-var Evernote = require('evernote').Evernote;
-var Wakeword = require('wakeword');
 var bodyParser = require('body-parser');
 var fs = require('fs');
 var run = require('./run.js');
 var platform = require('./platform.js');
 var wifi = require('./wifi.js');
 var wait = require('./wait.js');
-var evernoteConfig = require('./evernoteConfig.json');
 
 // Our local copy of all the data we get back from the oauth process
 var OAUTH_TOKEN_FILE = 'oauthToken.json'
@@ -42,7 +39,7 @@ if (platform.setVolumeLevel) {
 // If we never get a wifi connection, go into AP mode.
 // Before we start, though, let the user know that something is happening
 play('audio/starting.wav')
-  .then(() => waitForWifi(20, 3000))
+  .then(() => waitForWifi(1, 3000))
   .then(() => {
     // XXX: we should check that the token is still valid and prompt
     // the user to renew it if it is expired or will expire soon
@@ -104,14 +101,6 @@ function waitForWifi(maxAttempts, interval) {
 function startAP() {
   console.log("startAP");
 
-  // If we can't get on wifi, then discard any existing oauth
-  // credentials we have. If the Vaani box is in a new home then
-  // the user should have to authenticate again.
-  if (oauthToken !== null) {
-    oauthToken = null;
-    saveToken(null);
-  }
-
   // Scan for wifi networks now because we can't always scan once
   // the AP is being broadcast
   wifi.scan(10)   // retry up to 10 times
@@ -120,11 +109,6 @@ function startAP() {
     .then(() => {
       console.log('No wifi found; entering AP mode')
       talkOnFirstPage = true; // continue talking to the user when they connect
-      play('audio/help-me-connect.wav')
-        .then(() => waitForSpeech('okay'))
-        .then(() => play('audio/wifi-settings.wav'))
-        .then(() => waitForSpeech('okay'))
-        .then(() => play('audio/enter-url.wav'))
     });
 }
 
@@ -136,6 +120,7 @@ function startServer(wifiStatus) {
   server.use(bodyParser.urlencoded({extended:false}));
 
   // Define the handler methods for the various URLs we handle
+  server.get('/*', handleCaptive);
   server.get('/', handleRoot);
   server.get('/wifiSetup', handleWifiSetup);
   server.post('/connecting', handleConnecting);
@@ -148,7 +133,7 @@ function startServer(wifiStatus) {
   // XXX: note that we are HTTP only... is this a security issue?
   // XXX: for first-time this is on an open access point.
   server.listen(80);
-  console.log('HTTP server listening on port 80');
+  console.log('HTTP server listening');
 }
 
 function getTemplate(filename) {
@@ -159,9 +144,30 @@ var wifiSetupTemplate = getTemplate('./templates/wifiSetup.hbs');
 var oauthSetupTemplate = getTemplate('./templates/oauthSetup.hbs');
 var connectingTemplate = getTemplate('./templates/connecting.hbs');
 var statusTemplate = getTemplate('./templates/status.hbs');
+var hotspotTemplate = getTemplate('./templates/hotspot.hbs');
 
 // When the client issues a GET request for the list of wifi networks
 // scan and return them
+
+// this function handles requests for captive portals
+function handleCaptive(request, response, next) {
+  console.log('handleCaptive', request.path);
+  if (request.path === '/hotspot.html') {
+	console.log('sending hotspot');
+	response.send(hotspotTemplate());
+  } else if (request.path === '/hotspot-detect.html') {
+	console.log('CAPTIVE PORTAL REQUEST BY IOS OR MAC', request.path);
+	if (request.get('User-Agent').indexOf('CaptiveNetworkSupport') > -1) {
+		console.log('redirect to hotspot.html');
+		response.redirect(302, 'http://10.0.0.1/hotspot.html');
+	} else {
+		response.redirect(302, 'http://10.0.0.1/wifiSetup');
+	}
+  } else {
+	console.log('no handle captive mas nao tem o header do captive network support');
+   	next();
+  }
+}
 
 // This function handles requests for the root URL '/'.
 // We display a different page depending on what stage of setup we're at
@@ -174,17 +180,8 @@ function handleRoot(request, response) {
     }
     else {
       // Otherwise, look to see if we have an oauth token yet
-      if (!oauthToken) {
-        // if we don't, display the oauth setup page
-        console.log("wifi connnected; redirecting to /oauthSetup");
-        response.redirect('/oauthSetup');
-      }
-      else {
-        // If we get here, then both wifi and oauth are set up, so
-        // just display our current status
-        console.log("wifi and oauth setup complete; redirecting /status");
-        response.redirect('/status');
-      }
+      console.log("wifi setup complete; redirecting /status");
+      response.redirect('/status');
     }
   })
   .catch(e => {
@@ -195,7 +192,6 @@ function handleRoot(request, response) {
 function handleWifiSetup(request, response) {
   if (talkOnFirstPage) {
     talkOnFirstPage = false;
-    play('audio/connected.wav');
   }
 
   wifi.scan().then(results => {
@@ -385,16 +381,7 @@ function restartVaani() {
 }
 
 function play(filename) {
+  console.log('playing: ', filename);
   return run(platform.playAudio, { AUDIO: filename });
 }
 
-function waitForSpeech(word) {
-  return new Promise(function(resolve, reject) {
-    Wakeword.listen([word], 0.85, function(data, word) {
-      Wakeword.stop();
-      resolve();
-    }, function onready() {
-      /* For now, assume PS will be ready before the user is */
-    });
-  });
-}
