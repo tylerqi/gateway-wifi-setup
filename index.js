@@ -155,15 +155,17 @@ function handleCaptive(request, response, next) {
   if (request.path === '/hotspot.html') {
 	console.log('sending hotspot');
 	response.send(hotspotTemplate());
-  } else if (request.path === '/hotspot-detect.html') {
+  } else if (request.path === '/hotspot-detect.html' || 
+	    request.path === '/connecttest.txt') {
 	console.log('CAPTIVE PORTAL REQUEST BY IOS OR MAC', request.path);
-	if (request.get('User-Agent').indexOf('CaptiveNetworkSupport') > -1) {
+	if (request.get('User-Agent').includes('CaptiveNetworkSupport') || 
+	  request.get('User-Agent').includes('Microsoft NCSI')) {
 		console.log('redirect to hotspot.html');
 		response.redirect(302, 'http://10.0.0.1/hotspot.html');
 	} else {
 		response.redirect(302, 'http://10.0.0.1/wifiSetup');
 	}
-  } else if (request.path === '/generate_204') {
+  } else if (request.path === '/generate_204' || request.path === '/fwlink/') {
 	console.log('no handle captive mas nao tem o header do captive network support. deve ser google');
         response.redirect(302, 'http://10.0.0.1/wifiSetup');
   } else {
