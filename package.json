@@ -18,9 +18,7 @@
   "homepage": "https://github.com/mozilla/vaani.setup#readme",
   "dependencies": {
     "body-parser": "^1.15.2",
-    "evernote": "^1.25.82",
     "express": "^4.14.0",
-    "handlebars": "^4.0.5",
-    "wakeword": "https://github.com/andrenatal/wakeword"
+    "handlebars": "^4.0.5"
   }
 }
