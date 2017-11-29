@@ -163,8 +163,11 @@ function handleCaptive(request, response, next) {
 	} else {
 		response.redirect(302, 'http://10.0.0.1/wifiSetup');
 	}
+  } else if (request.path === '/generate_204') {
+	console.log('no handle captive mas nao tem o header do captive network support. deve ser google');
+        response.redirect(302, 'http://10.0.0.1/wifiSetup');
   } else {
-	console.log('no handle captive mas nao tem o header do captive network support');
+	console.log('no handle captive mas nao caiu em condicao nenhuma. passando');
    	next();
   }
 }
