@@ -19,8 +19,9 @@ var preliminaryScanResults;
 // Before we start, though, let the user know that something is happening
 waitForWifi(1, 3000)
   .then(() => {
-    // start the gateway
+    console.log('start the gateway');
     startVaani();
+    console.log('stop wifi setup');
     stopWifiService();
   })
   .catch((err) => {
@@ -48,8 +49,9 @@ function waitForWifi(maxAttempts, interval) {
         .then(status => {
           console.log(status);
           if (status === 'COMPLETED') {
-            console.log('Wifi connection found');
+            console.log('Wifi connection found. resolving');
             resolve();
+	    console.log('resolved'); 
           }
           else {
             console.log('No wifi connection on attempt', attempts);
@@ -216,6 +218,12 @@ function handleConnecting(request, response) {
     .then(() => wait(5000))
     .then(() => wifi.defineNetwork(ssid, password))
     .then(() => waitForWifi(20, 3000))
+    .then(() => {
+    	console.log('start the gateway');
+    	startVaani();
+    	console.log('stop wifi setup');
+    	stopWifiService();
+     })
     .catch((error) => {
 	console.log('General Error:', error);
     });
