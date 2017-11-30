@@ -4,9 +4,9 @@ module.exports = {
 //  startVaani: 'systemctl start vaani && systemctl start git-auto-updater',
 //  stopVaani: 'systemctl stop vaani && systemctl stop git-auto-updater',
 //  restartVaani: 'systemctl restart vaani && systemctl restart git-auto-updater',
-  startVaani: 'systemctl start git-auto-updater',
-  stopVaani: 'systemctl stop git-auto-updater',
-  restartVaani: 'systemctl restart git-auto-updater',
+  startVaani: 'systemctl start mozilla-iot-gateway',
+  stopVaani: 'systemctl stop mozilla-iot-gateway',
+  restartVaani: 'systemctl restart mozilla-iot-gateway',
   playAudio: 'aplay -q $AUDIO',
 
   // A shell command that outputs the string "COMPLETED" if we are

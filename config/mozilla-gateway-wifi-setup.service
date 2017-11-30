@@ -1,17 +1,16 @@
 [Unit]
-Description=Vaani Setup Server
+Description=Mozilla IoT Gateway Wifi Setup
 After=network.target
 
 [Service]
 Type=simple
+User=root
 StandardOutput=journal
 StandardError=journal
 # Edit this line, if needed, to specify where you installed the server
-WorkingDirectory=/home/pi/vaani.setup
+WorkingDirectory=/root/gateway-wifi-setup
 # Edit this line, if needed, to set the correct path to node
-ExecStart=/usr/local/bin/node index.js
-Restart=always
-RestartSec=10s
+ExecStart=/root/gateway-wifi-setup/run.sh 
 
 [Install]
 WantedBy=multi-user.target
