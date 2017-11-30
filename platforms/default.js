@@ -8,6 +8,7 @@ module.exports = {
   stopVaani: 'systemctl stop mozilla-iot-gateway',
   restartVaani: 'systemctl restart mozilla-iot-gateway',
   playAudio: 'aplay -q $AUDIO',
+  stopWifiService: 'systemctl stop mozilla-gateway-wifi-setup',
 
   // A shell command that outputs the string "COMPLETED" if we are
   // connected to a wifi network and outputs something else otherwise

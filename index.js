@@ -9,55 +9,29 @@ var platform = require('./platform.js');
 var wifi = require('./wifi.js');
 var wait = require('./wait.js');
 
-// Our local copy of all the data we get back from the oauth process
-var OAUTH_TOKEN_FILE = 'oauthToken.json'
-// Just the token value itself, saved as an environment variable
-// that is used when the vaani client is launched
-var OAUTH_ENV_FILE = '/lib/systemd/system/vaani.service.d/evernote.conf';
-
 // The Edison device can't scan for wifi networks while in AP mode, so
 // we've got to scan before we enter AP mode and save the results
 var preliminaryScanResults;
-
-// The parsed contents of the OAUTH_TOKEN_FILE, or null if we have no token
-var oauthToken = readToken();
-
-// We'll set this true if we enter AP mode and guide the user through
-// setup with voice
-var talkOnFirstPage = false;
-
-// Configure the microphone, if necessary
-if (platform.microphoneDevice) {
-  Wakeword.deviceName = platform.microphoneDevice
-}
-
-// Turn up the output volume, if necessary
-if (platform.setVolumeLevel) {
-  run(platform.setVolumeLevel)
-}
 
 // Wait until we have a working wifi connection. Retry every 3 seconds up
 // to 10 times. If we are connected, then start the Vaani client.
 // If we never get a wifi connection, go into AP mode.
 // Before we start, though, let the user know that something is happening
-play('audio/starting.wav')
-  .then(() => waitForWifi(1, 3000))
+waitForWifi(1, 3000)
   .then(() => {
-    // XXX: we should check that the token is still valid and prompt
-    // the user to renew it if it is expired or will expire soon
-    if (oauthToken) {
-      startVaani();
-    }
-    else {
-      // If we get here it means we've got a wifi connection but
-      // don't have an oauth token. Tell the user to finish setup
-      play('audio/finish.wav');
-    }
+    // start the gateway
+    startVaani();
+    stopWifiService();
   })
-  .catch(startAP);
+  .catch((err) => {
+	console.log('error starting wifi:', err);
+	startAP();
+	}
+   );
 
 // Meanwhile, start running the server.
 startServer();
+
 
 // Return a promise, then check every interval ms for a wifi connection.
 // Resolve the promise when we're connected. Or, if we aren't connected
@@ -115,8 +89,9 @@ function startAP() {
 }
 
 function startServer(wifiStatus) {
-  // Now start up the express server
-  var server = Express();
+
+   // The express server
+   var server = Express();
 
   // When we get POSTs, handle the body like this
   server.use(bodyParser.urlencoded({extended:false}));
@@ -126,9 +101,6 @@ function startServer(wifiStatus) {
   server.get('/', handleRoot);
   server.get('/wifiSetup', handleWifiSetup);
   server.post('/connecting', handleConnecting);
-  server.get('/oauthSetup', handleOauthSetup);
-  server.get('/oauth', handleOauth);
-  server.get('/oauth_callback', handleOauthCallback);
   server.get('/status', handleStatus);
 
   // And start listening for connections
@@ -197,9 +169,6 @@ function handleRoot(request, response) {
 }
 
 function handleWifiSetup(request, response) {
-  if (talkOnFirstPage) {
-    talkOnFirstPage = false;
-  }
 
   wifi.scan().then(results => {
     // On Edison, scanning will fail since we're in AP mode at this point
@@ -247,95 +216,14 @@ function handleConnecting(request, response) {
     .then(() => wait(5000))
     .then(() => wifi.defineNetwork(ssid, password))
     .then(() => waitForWifi(20, 3000))
-    .then(() => {
-      play('audio/continue.wav');
-    })
-    .catch(() => {
-      play('audio/error.wav');
+    .catch((error) => {
+	console.log('General Error:', error);
     });
-}
-
-function handleOauthSetup(request, response) {
-  response.send(oauthSetupTemplate());
-}
-
-// We hold our oauth state here. If this was a server that ever had
-// multiple clients, we'd have to use session state. But since we expect
-// only one client, we just use globak state
-var oauthState = {};
-
-function handleOauth(request, response) {
-  var client = new Evernote.Client(evernoteConfig);
-  var callbackURL = request.protocol + "://" + request.headers.host +
-      '/oauth_callback';
-  client.getRequestToken(callbackURL, gotRequestToken);
-
-  function gotRequestToken(error, oauthToken, oauthTokenSecret, results) {
-    if (error) {
-      console.error('Error getting request token: ', error);
-      oauthState.error = JSON.stringify(error);
-      response.redirect('/');
-      return;
-    }
-
-    // Remember the results of this first step
-    oauthState.oauthToken = oauthToken;
-    oauthState.oauthTokenSecret = oauthTokenSecret;
-
-    // And now redirect to Evernote to let the user authorize
-    response.redirect(client.getAuthorizeUrl(oauthToken));
-  }
-}
-
-function handleOauthCallback(request, response) {
-  var client = new Evernote.Client(evernoteConfig);
-  client.getAccessToken(oauthState.oauthToken,
-                        oauthState.oauthTokenSecret,
-                        request.query['oauth_verifier'],
-                        gotAccessToken);
-
-  function gotAccessToken(error, oauthAccessToken,
-                          oauthAccessTokenSecret, results) {
-    if (error) {
-      if (error.statusCode === 401) {
-        console.error('Unauthorized');
-      }
-      else {
-        console.error('Error getting access token:', error);
-      }
-      oauthToken = null;
-      saveToken(null);   // Erase any previously saved token.
-      stopVaani();
-      response.redirect('/');
-      return;
-    }
-
-    // Store the oauth results in a global variable
-    oauthToken = {
-      oauthAccessToken: oauthAccessToken,
-      oauthAccessTokenSecret: oauthAccessTokenSecret,
-      results: results
-    };
-
-    console.log("saving oauth access token to", OAUTH_ENV_FILE);
-    console.log("saving oauth results to", OAUTH_TOKEN_FILE);
-    saveToken(oauthToken)
-
-    // Start or restart the Vaani client now
-    restartVaani();
-    response.redirect('/');
-  }
 }
 
 function handleStatus(request, response) {
   wifi.getConnectedNetwork().then(ssid => {
     var until = '';
-    if (oauthToken.results &&
-        oauthToken.results.edam_expires &&
-        parseInt(oauthToken.results.edam_expires)) {
-      until = new Date(parseInt(oauthToken.results.edam_expires)).toString();
-    }
-
     response.send(statusTemplate({
       ssid: ssid,
       until: until
@@ -343,52 +231,26 @@ function handleStatus(request, response) {
   });
 }
 
-function saveToken(token) {
-  // And in the local file
-  fs.writeFileSync(OAUTH_TOKEN_FILE, JSON.stringify(token));
-
-  // And in the environment variable config file for the Vaani client
-  var confFile = `[Service]
-Environment="EVERNOTE_OAUTH_TOKEN=${(token && token.oauthAccessToken) || ''}"
-`
-  fs.writeFileSync(OAUTH_ENV_FILE, confFile);
-}
-
-function readToken() {
-  try {
-    var oauthToken = JSON.parse(fs.readFileSync(OAUTH_TOKEN_FILE, 'utf8'));
-    if (oauthToken && oauthToken.oauthAccessToken) {
-      return oauthToken
-    }
-    else {
-      return null;
-    }
-  }
-  catch(e) {
-    return null;
-  }
-}
-
 function startVaani() {
   return run(platform.startVaani)
-    .then((out) => console.log('Vaani started', out))
-    .catch((err) => console.error('Error starting Vaani:', err));
+    .then((out) => console.log('Gateway started', out))
+    .catch((err) => console.error('Error starting Gateway:', err));
 }
 
 function stopVaani() {
   return run(platform.stopVaani)
-    .then((out) => console.log('Vaani started', out))
-    .catch((err) => console.error('Error starting Vaani:', err));
+    .then((out) => console.log('Gateway stopped', out))
+    .catch((err) => console.error('Error stopping Gateway:', err));
 }
 
 function restartVaani() {
   return run(platform.restartVaani)
-    .then((out) => console.log('Vaani started', out))
-    .catch((err) => console.error('Error starting Vaani:', err));
+    .then((out) => console.log('Gateway restarted', out))
+    .catch((err) => console.error('Error restarting Gateway:', err));
 }
 
-function play(filename) {
-  console.log('playing: ', filename);
-  return run(platform.playAudio, { AUDIO: filename });
+function stopWifiService() {
+  return run(platform.stopWifiService)
+    .then((out) => console.log('VWifi service stopped', out))
+    .catch((err) => console.error('Error stopping wifi service:', err));
 }
-
