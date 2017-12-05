@@ -215,6 +215,8 @@ function handleConnecting(request, response) {
 
   if (request.body.skip === '1') {
     fs.closeSync(fs.openSync('wifiskip', 'w'));
+    console.log('skip wifi setup. stop the ap');
+    wifi.stopAP();
     console.log('skip wifi setup. start the gateway');
     startGateway();
     console.log('stop wifi setup');
