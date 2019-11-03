@@ -276,14 +276,14 @@
         }
       }
     </script>
-    <title>Mozilla Gateway</title>
+    <title>网关</title>
   </head>
   <body>
     <form action="/connecting" method="post" id="mainform">
       <div id="step1">
         <div id="maindiv">
-          <h1>Welcome</h1>
-          <h3>Connect to a WiFi network?</h3><br>
+          <h1>欢迎</h1>
+          <h3>连接到WiFi网络?</h3><br>
           {{#networks}}
             <button onclick="window.selectssid(event, '{{{escapeQuotes ssid}}}', {{pwdRequired}})" id="item"
                     class="item ssid"><div id="text-ssid">{{ssid}}</div> <img id='wifi-icon' src='/{{icon}}'>
@@ -299,7 +299,7 @@
           <div id='div-wifi-text'><h3 id="selected-network">{selected network}</h3></div>
         </div>
         <div id="maindiv2">
-          <input type="password" name="password" placeholder="WiFi Password"
+          <input type="password" name="password" placeholder="WiFi 密码"
                  class="item password"><br>
           <input onclick="window.displaypassword()" id="showpassword"
                  type="checkbox" class="showpassword-checkbox">
